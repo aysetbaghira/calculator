@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scientific Calculator + Math Coach</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#151b24; --screen:#0a0e13;
+    --key:#1e2632; --key-hover:#2a3543;
+    --line:#232d3b; --text:#e8edf4; --muted:#8b98ab;
+    --accent:#4da3ff; --warm:#ffb454; --danger:#ff6b6b; --ok:#5ddc9a;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; display:grid; place-items:center; padding:24px;
+    background:radial-gradient(1200px 600px at 15% -10%, #1b2536 0%, #0d1117 55%, #080a0e 100%);
+    color:var(--text);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{display:grid; grid-template-columns:430px 340px; gap:20px; align-items:start}
+  @media (max-width:860px){ .app{grid-template-columns:1fr} }
+
+  /* ---------- calculator card ---------- */
+  .calc{
+    background:var(--panel); border:1px solid var(--line); border-radius:22px;
+    padding:16px; box-shadow:0 24px 70px rgba(0,0,0,.5);
+  }
+  .screen{
+    background:var(--screen); border:1px solid var(--line); border-radius:16px;
+    padding:12px 14px; display:flex; flex-direction:column; gap:8px; min-height:132px;
+  }
+  .status{display:flex; gap:6px; flex-wrap:wrap}
+  .badge{
+    font-size:10px; letter-spacing:.1em; text-transform:uppercase; font-weight:700;
+    border:1px solid #2b3546; color:var(--muted); border-radius:999px; padding:2px 9px;
+  }
+  .badge.on{background:var(--accent); border-color:var(--accent); color:#04121f}
+  .badge[hidden]{display:none}
+  .expr{
+    font-size:21px; text-align:right; word-break:break-all; line-height:1.35;
+    font-variant-numeric:tabular-nums; flex:1; color:#cfd9e6;
+  }
+  .result{
+    font-size:32px; font-weight:800; text-align:right; word-break:break-all;
+    color:var(--accent); line-height:1.2; min-height:38px;
+    font-variant-numeric:tabular-nums;
+  }
+  .result.preview{font-size:22px; font-weight:500; color:var(--muted)}
+
+  .coach{
+    margin:12px 2px 14px; font-size:12.5px; line-height:1.5; min-height:42px;
+    color:var(--muted); border-left:2px solid var(--line); padding-left:10px;
+  }
+  .coach.error{color:var(--danger); border-color:var(--danger)}
+  .coach.ok{color:var(--ok); border-color:var(--ok)}
+  .coach .hint{color:var(--muted); margin-top:2px}
+
+  /* ---------- keypad ---------- */
+  .keys{display:grid; grid-template-columns:repeat(6,1fr); gap:8px}
+  .key{
+    font:inherit; font-size:15px; color:var(--text); cursor:pointer;
+    background:var(--key); border:1px solid #26303f; border-radius:11px;
+    padding:13px 2px; transition:background .12s, transform .05s, border-color .12s;
+    user-select:none;
+  }
+  .key:hover{background:var(--key-hover); border-color:#334155}
+  .key:active{transform:translateY(1px)}
+  .key.fn{background:#171e28; color:#a9c2e0; font-size:13px}
+  .key.op{background:#1b2632; color:var(--warm); font-weight:600}
+  .key.danger{color:var(--danger)}
+  .key.eq{
+    grid-row:span 2; background:linear-gradient(180deg,#5cb0ff,#2f7fd6);
+    color:#04121f; font-weight:800; font-size:19px; border-color:#2f7fd6;
+  }
+  .key.eq:hover{background:linear-gradient(180deg,#74bcff,#3a8ee0)}
+  .key.wide{grid-column:span 3}
+  .key.active{background:var(--accent); color:#04121f; font-weight:700; border-color:var(--accent)}
+
+  .toolbar{display:flex; gap:8px; margin-top:10px}
+  .tool{
+    flex:1; font:inherit; font-size:12px; cursor:pointer; padding:9px;
+    background:#171e28; color:#a9c2e0; border:1px solid #26303f; border-radius:10px;
+  }
+  .tool:hover{background:var(--key-hover)}
+  .tool.listening{background:var(--danger); color:#fff; border-color:var(--danger)}
+
+  /* ---------- side panel ---------- */
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:22px;
+    padding:16px; box-shadow:0 24px 70px rgba(0,0,0,.5);
+  }
+  .tabs{display:flex; gap:6px; margin-bottom:14px}
+  .tab{
+    flex:1; font:inherit; font-size:12px; font-weight:600; cursor:pointer; padding:8px 4px;
+    background:transparent; color:var(--muted); border:1px solid transparent;
+    border-radius:9px;
+  }
+  .tab:hover{color:var(--text)}
+  .tab.active{background:#1b2632; color:var(--accent); border-color:#26303f}
+  .tabbody{display:flex; flex-direction:column; gap:8px; max-height:520px; overflow-y:auto}
+
+  .example, .history-item{
+    display:flex; flex-direction:column; gap:2px; text-align:left; width:100%;
+    font:inherit; cursor:pointer; padding:10px 12px;
+    background:#111823; border:1px solid #1f2836; border-radius:11px;
+    color:var(--text); transition:background .12s, border-color .12s;
+  }
+  .example:hover, .history-item:hover{background:#18202d; border-color:#2d3a4d}
+  .ex-title{font-size:12px; color:var(--muted); font-weight:600; letter-spacing:.02em}
+  .example code{font-size:15px; color:var(--warm); font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .ex-note{font-size:11.5px; color:#6f7d91}
+  .history-item .h-expr{font-size:13px; color:#cfd9e6; font-family:ui-monospace,Menlo,monospace}
+  .history-item .h-val{font-size:15px; color:var(--accent); font-weight:700}
+
+  .help p{margin:0 0 10px; font-size:12.5px; line-height:1.6; color:var(--muted)}
+  .help h4{margin:14px 0 6px; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#61708a}
+  .help code{
+    background:#111823; border:1px solid #1f2836; border-radius:5px;
+    padding:1px 5px; font-size:11.5px; color:var(--warm);
+  }
+  .empty{font-size:12.5px; color:#5d6b7e; text-align:center; padding:24px 8px}
+  .tabbody::-webkit-scrollbar{width:8px}
+  .tabbody::-webkit-scrollbar-thumb{background:#26303f; border-radius:8px}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============ CALCULATOR ============ -->
+  <section class="calc">
+    <div class="screen">
+      <div class="status">
+        <span class="badge" id="angleBadge">DEG</span>
+        <span class="badge" id="memBadge" hidden>M</span>
+        <span class="badge on" id="speakBadge">🔊 Voice</span>
+        <span class="badge" id="secondBadge" hidden>2nd</span>
+      </div>
+      <div class="expr" id="expr">0</div>
+      <div class="result" id="result"></div>
+    </div>
+
+    <div class="coach" id="coach"></div>
+
+    <div class="keys" id="keypad"></div>
+
+    <div class="toolbar">
+      <button class="tool" id="micBtn">🎤 Speak a sum</button>
+      <button class="tool" id="speakBtn">🔊 Voice feedback: on</button>
+    </div>
+  </section>
+
+  <!-- ============ SIDE PANEL ============ -->
+  <aside class="panel">
+    <div class="tabs">
+      <button class="tab active" data-tab="examples">Examples</button>
+      <button class="tab" data-tab="history">History</button>
+      <button class="tab" data-tab="help">Help</button>
+    </div>
+    <div class="tabbody" id="tabbody"></div>
+  </aside>
+
+</div>
+
+<script>
+/* =========================================================================
+   1. THE MATH ENGINE
+   -------------------------------------------------------------------------
+   We do NOT use eval(). Instead we build a tiny three-stage pipeline:
+
+       text  ──tokenize──▶  tokens  ──parse──▶  value
+
+   That way, when something is wrong we know exactly *where* and *why*,
+   which is what makes the plain-English coaching possible.
+   ========================================================================= */
+
+class CalcError extends Error {
+  constructor(message, hint = '') {
+    super(message);
+    this.name = 'CalcError';
+    this.hint = hint;
+  }
+}
+
+/* ---------- 1a. Tokenizer: text → tokens ---------- */
+
+const FUNCTION_NAMES = ['asin','acos','atan','sqrt','log','ln','abs','exp','sin','cos','tan']
+  .sort((a, b) => b.length - a.length);          // longest first: "asin" before "sin"
+
+function tokenize(source) {
+  const tokens = [];
+  let i = 0;
+
+  while (i < source.length) {
+    const ch = source[i];
+
+    if (/\s/.test(ch)) { i++; continue; }
+
+    /* --- numbers: 42, 3.14, .5 --- */
+    if (/[0-9]/.test(ch) || (ch === '.' && /[0-9]/.test(source[i + 1] || ''))) {
+      let j = i, dots = 0;
+      while (j < source.length && /[0-9.]/.test(source[j])) {
+        if (source[j] === '.') dots++;
+        j++;
+      }
+      const text = source.slice(i, j);
+      if (dots > 1) {
+        throw new CalcError(`"${text}" has more than one decimal point.`,
+                            'A number looks like 12.5 — just one "." please.');
+      }
+      tokens.push({ type: 'number', value: Number(text), text, pos: i });
+      i = j;
+      continue;
+    }
+
+    /* --- letters: function names and constants --- */
+    if (/[a-zA-Z]/.test(ch)) {
+      const rest = source.slice(i).toLowerCase();
+
+      const fn = FUNCTION_NAMES.find(name => rest.startsWith(name));
+      if (fn) { tokens.push({ type: 'function', name: fn, pos: i }); i += fn.length; continue; }
+
+      if (rest.startsWith('pi')) { tokens.push({ type: 'constant', value: Math.PI, pos: i }); i += 2; continue; }
+      if (rest[0] === 'e')       { tokens.push({ type: 'constant', value: Math.E,  pos: i }); i += 1; continue; }
+
+      throw new CalcError(`I don't recognise "${source.slice(i, i + 4)}".`,
+                          'Check the spelling, or use a button from the keypad.');
+    }
+
+    /* --- Greek pi --- */
+    if (ch === 'π') { tokens.push({ type: 'constant', value: Math.PI, pos: i }); i++; continue; }
+
+    /* --- operators and punctuation --- */
+    if ('+-*/^'.includes(ch))  { tokens.push({ type: 'operator', value: ch, pos: i }); i++; continue; }
+    if (ch === '(')            { tokens.push({ type: 'lparen', pos: i }); i++; continue; }
+    if (ch === ')')            { tokens.push({ type: 'rparen', pos: i }); i++; continue; }
+    if (ch === '!')            { tokens.push({ type: 'factorial', pos: i }); i++; continue; }
+    if (ch === '%')            { tokens.push({ type: 'percent', pos: i }); i++; continue; }
+
+    throw new CalcError(`"${ch}" isn't something I can calculate with.`,
+                        'Use digits, + − × ÷ ^ ( ) and the function buttons.');
+  }
+
+  return tokens;
+}
+
+/* ---------- 1b. Helper functions ---------- */
+
+function factorial(n) {
+  if (n < 0) {
+    throw new CalcError('Factorials of negative numbers are not defined.',
+                        'Try 5! (= 120) instead of (−5)!.');
+  }
+  if (!Number.isInteger(n)) {
+    throw new CalcError(`I can only do factorials of whole numbers, not ${n}.`,
+                        'Factorials work on 0, 1, 2, 3… — for example 6! = 720.');
+  }
+  if (n > 170) {
+    throw new CalcError('That factorial is too big to hold.',
+                        'Anything above 170! is larger than a computer can store.');
+  }
+  let r = 1;
+  for (let i = 2; i <= n; i++) r *= i;
+  return r;
+}
+
+function applyFunction(name, x, angleMode) {
+  const toRad   = angleMode === 'DEG' ? Math.PI / 180 : 1;
+  const fromRad = angleMode === 'DEG' ? 180 / Math.PI : 1;
+
+  switch (name) {
+    case 'sin': return Math.sin(x * toRad);
+    case 'cos': return Math.cos(x * toRad);
+
+    case 'tan': {
+      // tan is undefined at 90° + 180°k
+      if (angleMode === 'DEG' && Math.abs(((x % 180) + 180) % 180 - 90) < 1e-9) {
+        throw new CalcError(`tan(${x}°) is undefined.`,
+                            'At 90°, 270°, −90°… the tangent line is vertical, so there is no real answer.');
+      }
+      const v = Math.tan(x * toRad);
+      if (!isFinite(v)) throw new CalcError('That tangent is undefined.',
+                                            'Tangent has no value at 90° + 180°k.');
+      return v;
+    }
+
+    case 'asin':
+      if (x < -1 || x > 1) throw new CalcError('asin only accepts numbers between −1 and 1.',
+                                               'Sine can never be bigger than 1, so asin(2) has no real answer.');
+      return Math.asin(x) * fromRad;
+
+    case 'acos':
+      if (x < -1 || x > 1) throw new CalcError('acos only accepts numbers between −1 and 1.',
+                                               'Cosine can never be bigger than 1, so acos(2) has no real answer.');
+      return Math.acos(x) * fromRad;
+
+    case 'atan': return Math.atan(x) * fromRad;
+
+    case 'sqrt':
+      if (x < 0) throw new CalcError(`The square root of ${x} is not a real number.`,
+                                     'No real number multiplied by itself gives a negative answer.');
+      return Math.sqrt(x);
+
+    case 'log':
+      if (x <= 0) throw new CalcError('log only works on positive numbers.',
+                                      'There is no power of 10 that gives 0 or a negative number.');
+      return Math.log10(x);
+
+    case 'ln':
+      if (x <= 0) throw new CalcError('ln only works on positive numbers.',
+                                      'There is no power of e that gives 0 or a negative number.');
+      return Math.log(x);
+
+    case 'abs': return Math.abs(x);
+    case 'exp': return Math.exp(x);
+
+    default: throw new CalcError(`I don't know the function "${name}".`);
+  }
+}
+
+/* ---------- 1c. Parser: tokens → value ----------
+   Grammar (each line "binds" more tightly than the one above it):
+
+     expression := term (('+' | '-') term)*
+     term       := unary (('*' | '/') unary | unary)*        ← last part = implicit ×
+     unary      := ('-' | '+') unary | power
+     power      := postfix ('^' unary)?                       ← right-associative
+     postfix    := primary ('!' | '%')*
+     primary    := number | constant | '(' expression ')' | function '(' expression ')'
+   --------------------------------------------------- */
+
+class Parser {
+  constructor(tokens, angleMode) {
+    this.tokens = tokens;
+    this.pos = 0;
+    this.angleMode = angleMode;
+  }
+
+  peek()   { return this.tokens[this.pos]; }
+  atEnd()  { return this.pos >= this.tokens.length; }
+  advance(){ return this.tokens[this.pos++]; }
+
+  /* Every parse method returns { value, percent }.
+     `percent` remembers whether this number was written with a "%",
+     so that "200 + 10%" can mean "200 plus 10 percent OF 200". */
+  node(value, percent = false) { return { value, percent }; }
+
+  parse() {
+    if (this.tokens.length === 0) {
+      throw new CalcError('There is nothing to calculate yet.',
+                          'Type a sum like 2 + 2 and press =.');
+    }
+
+    const result = this.parseExpression();
+
+    if (!this.atEnd()) {
+      const t = this.peek();
+      const what = t.type === 'number' ? `the number ${t.text}`
+                 : t.type === 'rparen' ? 'a ")"'
+                 : t.type === 'lparen' ? 'a "("'
+                 : `"${t.value || t.name || t.type}"`;
+      throw new CalcError(`I got stuck at ${what}.`,
+                          'Two things are sitting next to each other that do not belong together.');
+    }
+
+    return result;
+  }
+
+  parseExpression() {
+    let left = this.parseTerm();
+
+    while (!this.atEnd()) {
+      const t = this.peek();
+      if (t.type !== 'operator' || (t.value !== '+' && t.value !== '-')) break;
+
+      this.advance();
+      const right = this.parseTerm();
+
+      // The percentage special case: 200 + 10%  →  200 + (200 × 0.10)
+      if (right.percent) {
+        const delta = left.value * right.value;
+        left = this.node(t.value === '+' ? left.value + delta : left.value - delta);
+      } else {
+        left = this.node(t.value === '+' ? left.value + right.value : left.value - right.value);
+      }
+    }
+    return left;
+  }
+
+  parseTerm() {
+    let left = this.parseUnary();
+
+    while (!this.atEnd()) {
+      const t = this.peek();
+
+      if (t.type === 'operator' && (t.value === '*' || t.value === '/')) {
+        this.advance();
+        const right = this.parseUnary();
+
+        if (t.value === '/') {
+          if (right.value === 0) {
+            throw new CalcError('Division by zero.',
+                                'The number underneath a fraction can never be 0 — the answer would be undefined.');
+          }
+          left = this.node(left.value / right.value);
+        } else {
+          left = this.node(left.value * right.value);
+        }
+        continue;
+      }
+
+      // Implicit multiplication: 2π, 3(4+1), 2sin(30)
+      if (['number', 'constant', 'lparen', 'function'].includes(t.type)) {
+        const right = this.parseUnary();
+        left = this.node(left.value * right.value);
+        continue;
+      }
+
+      break;
+    }
+    return left;
+  }
+
+  parseUnary() {
+    const t = this.peek();
+    if (t && t.type === 'operator' && (t.value === '-' || t.value === '+')) {
+      this.advance();
+      const operand = this.parseUnary();
+      return this.node(t.value === '-' ? -operand.value : operand.value, operand.percent);
+    }
+    return this.parsePower();
+  }
+
+  parsePower() {
+    const base = this.parsePostfix();
+    const t = this.peek();
+
+    if (t && t.type === 'operator' && t.value === '^') {
+      this.advance();
+      const exponent = this.parseUnary();            // right-associative, allows 2^-3
+      const value = Math.pow(base.value, exponent.value);
+
+      if (!isFinite(value)) {
+        throw new CalcError(`I can't raise ${base.value} to the power ${exponent.value}.`,
+                            'A negative number with a fractional power has no real answer.');
+      }
+      return this.node(value);
+    }
+    return base;
+  }
+
+  parsePostfix() {
+    let n = this.parsePrimary();
+
+    for (;;) {
+      const t = this.peek();
+      if (!t) break;
+
+      if (t.type === 'factorial')      { this.advance(); n = this.node(factorial(n.value)); }
+      else if (t.type === 'percent')   { this.advance(); n = this.node(n.value / 100, true); }
+      else break;
+    }
+    return n;
+  }
+
+  parsePrimary() {
+    const t = this.peek();
+
+    if (!t) {
+      throw new CalcError('The expression stops in the middle of a thought.',
+                          'The last operator is missing a number after it.');
+    }
+
+    if (t.type === 'number' || t.type === 'constant') {
+      this.advance();
+      return this.node(t.value);
+    }
+
+    if (t.type === 'lparen') {
+      this.advance();
+      const inner = this.parseExpression();
+      if (!this.peek() || this.peek().type !== 'rparen') {
+        throw new CalcError('You opened a bracket but never closed it.',
+                            'Add a ")" to finish the group — for example (2 + 3) × 4.');
+      }
+      this.advance();
+      return this.node(inner.value, inner.percent);
+    }
+
+    if (t.type === 'rparen') {
+      throw new CalcError('There is a ")" with no "(" before it.',
+                          'Every closing bracket needs an opening one.');
+    }
+
+    if (t.type === 'function') {
+      this.advance();
+      const open = this.peek();
+      if (!open || open.type !== 'lparen') {
+        throw new CalcError(`${t.name} needs a value in brackets.`,
+                            `Write it like ${t.name}(30).`);
+      }
+      this.advance();
+      const arg = this.parseExpression();
+      if (!this.peek() || this.peek().type !== 'rparen') {
+        throw new CalcError(`The bracket after ${t.name} was never closed.`,
+                            `Write it like ${t.name}(30).`);
+      }
+      this.advance();
+      return this.node(applyFunction(t.name, arg.value, this.angleMode));
+    }
+
+    if (t.type === 'operator') {
+      throw new CalcError(`The "${t.value}" symbol is missing something on its left.`,
+                          'An operator needs a number on both sides — like 8 ÷ 2.');
+    }
+
+    if (t.type === 'factorial' || t.type === 'percent') {
+      throw new CalcError(`"${t.type === 'factorial' ? '!' : '%'}" needs a number before it.`,
+                          'Try 5! or 25%.');
+    }
+
+    throw new CalcError('Something in there does not make sense.');
+  }
+}
+
+/* ---------- 1d. The public evaluate() ---------- */
+
+function evaluate(expression, angleMode) {
+  const tokens = tokenize(expression);
+  const parser = new Parser(tokens, angleMode);
+  const result = parser.parse();
+
+  if (Number.isNaN(result.value)) {
+    throw new CalcError('That works out to "not a number".',
+                        'Double-check for something like 0 ÷ 0 or a negative square root.');
+  }
+  if (!isFinite(result.value)) {
+    throw new CalcError('That answer is too big (or too small) to show.',
+                        'Try smaller numbers, or break the calculation into steps.');
+  }
+  return result.value;
+}
+
+/* =========================================================================
+   2. APP STATE
+   ========================================================================= */
+
+const state = {
+  expression: '',
+  ans: 0,
+  memory: 0,
+  angleMode: 'DEG',
+  second: false,
+  speak: true,
+  history: []
+};
+let justEvaluated = false;
+let activeTab = 'examples';
+
+/* ---------- DOM handles ---------- */
+const exprEl    = document.getElementById('expr');
+const resultEl  = document.getElementById('result');
+const coachEl   = document.getElementById('coach');
+const keypadEl  = document.getElementById('keypad');
+const tabBody   = document.getElementById('tabbody');
+const angleBadge  = document.getElementById('angleBadge');
+const memBadge    = document.getElementById('memBadge');
+const speakBadge  = document.getElementById('speakBadge');
+const secondBadge = document.getElementById('secondBadge');
+
+/* =========================================================================
+   3. NUMBER FORMATTING
+   ========================================================================= */
+
+function formatNumber(n) {
+  if (Number.isNaN(n)) return 'Not a number';
+  if (!isFinite(n))    return n > 0 ? '∞' : '−∞';
+  if (n === 0)         return '0';
+
+  const abs = Math.abs(n);
+  if (abs >= 1e15 || abs < 1e-9) {
+    return n.toExponential(6).replace('e', '×10^').replace('+', '');
+  }
+
+  const rounded = Math.round(n * 1e10) / 1e10;       // kill floating-point dust
+  if (Number.isInteger(rounded)) return rounded.toLocaleString('en-US');
+  return rounded.toLocaleString('en-US', { maximumFractionDigits: 10 });
+}
+
+/* The raw string form we feed back into the parser (no thousands commas). */
+function plainNumber(n) {
+  if (!isFinite(n)) return '0';
+  return String(n);
+}
+
+/* =========================================================================
+   4. TEXT → INTERNAL EXPRESSION
+   ========================================================================= */
+
+function normalize(expr) {
+  return expr
+    .replace(/×/g, '*')
+    .replace(/÷/g, '/')
+    .replace(/−/g, '-')     // U+2212 minus sign
+    .replace(/√/g, 'sqrt')
+    .replace(/Ans/g, `(${plainNumber(state.ans)})`);
+}
+
+/* =========================================================================
+   5. DISPLAY + COACHING
+   ========================================================================= */
+
+function setCoach(message, hint = '', type = '') {
+  coachEl.className = 'coach' + (type ? ' ' + type : '');
+  coachEl.textContent = '';
+
+  if (!message && !hint) {
+    coachEl.textContent = 'Type a calculation, or pick an example on the right →';
+    return;
+  }
+  const main = document.createElement('div');
+  main.textContent = message;
+  coachEl.appendChild(main);
+
+  if (hint) {
+    const sub = document.createElement('div');
+    sub.className = 'hint';
+    sub.textContent = hint;
+    coachEl.appendChild(sub);
+  }
+}
+
+function updateStatus() {
+  angleBadge.textContent = state.angleMode;
+  memBadge.hidden = state.memory === 0;
+  secondBadge.hidden = !state.second;
+  speakBadge.classList.toggle('on', state.speak);
+  speakBadge.textContent = state.speak ? '🔊 Voice' : '🔇 Muted';
+}
+
+/* Repaint the screen, including the live "= preview" of the answer. */
+function updateDisplay() {
+  exprEl.textContent = state.expression || '0';
+
+  if (!state.expression.trim()) {
+    resultEl.textContent = '';
+    resultEl.classList.remove('preview');
+    return;
+  }
+
+  try {
+    const value = evaluate(normalize(state.expression), state.angleMode);
+    resultEl.textContent = '= ' + formatNumber(value);
+    resultEl.classList.add('preview');
+  } catch {
+    // While typing, an expression is often just "incomplete" (like "2+").
+    // Stay quiet and let the user finish.
+    resultEl.textContent = '';
+    resultEl.classList.remove('preview');
+  }
+}
+
+/* =========================================================================
+   6. VOICE  (the "twist")
+   ========================================================================= */
+
+function speak(text) {
+  if (!state.speak || !('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.05;
+    utterance.pitch = 1;
+    window.speechSynthesis.speak(utterance);
+  } catch { /* speech is a bonus, never a blocker */ }
+}
+
+/* Turn "two plus five times three" into "2+5*3". */
+const SPOKEN_DIGITS = {
+  zero:'0', one:'1', two:'2', three:'3', four:'4',
+  five:'5', six:'6', seven:'7', eight:'8', nine:'9', ten:'10'
+};
+
+function spokenToExpression(text) {
+  let s = ' ' + text.toLowerCase() + ' ';
+
+  s = s
+    .replace(/\bsquare root of\b/g, ' sqrt( ')
+    .replace(/\bsquared\b/g, ' ^2 ')
+    .replace(/\bcubed\b/g, ' ^3 ')
+    .replace(/\bto the power of\b/g, ' ^ ')
+    .replace(/\bpower of\b/g, ' ^ ')
+    .replace(/\bdivided by\b/g, ' / ')
+    .replace(/\bdivide by\b/g, ' / ')
+    .replace(/\bover\b/g, ' / ')
+    .replace(/\bmultiplied by\b/g, ' * ')
+    .replace(/\bmultiply by\b/g, ' * ')
+    .replace(/\btimes\b/g, ' * ')
+    .replace(/\bplus\b/g, ' + ')
+    .replace(/\bminus\b/g, ' - ')
+    .replace(/\bpoint\b/g, '.')
+    .replace(/\bdecimal\b/g, '.')
+    .replace(/\bpi\b/g, 'π');
+
+  s = s.replace(
+    /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)\b/g,
+    m => SPOKEN_DIGITS[m]
+  );
+
+  return s.replace(/[×x]/g, '*').replace(/\s+/g, '').trim();
+}
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+function startListening() {
+  const micBtn = document.getElementById('micBtn');
+
+  if (!SpeechRecognition) {
+    setCoach('Voice input is not supported in this browser.',
+             'Try Chrome or Edge — the rest of the calculator works fine.', 'error');
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  micBtn.classList.add('listening');
+  micBtn.textContent = '🎤 Listening…';
+
+  recognition.onresult = (event) => {
+    const said = event.results[0][0].transcript;
+    const expr = spokenToExpression(said);
+
+    state.expression = expr;
+    justEvaluated = false;
+    updateDisplay();
+    setCoach(`Heard: “${said}”`, `I turned that into  ${expr}  — press = to check it.`, 'ok');
+  };
+
+  recognition.onerror = (event) => {
+    setCoach('I could not hear that.',
+             event.error === 'not-allowed'
+               ? 'Allow microphone access in your browser, then try again.'
+               : 'Try again somewhere quieter.', 'error');
+  };
+
+  recognition.onend = () => {
+    micBtn.classList.remove('listening');
+    micBtn.textContent = '🎤 Speak a sum';
+  };
+
+  try { recognition.start(); }
+  catch {
+    micBtn.classList.remove('listening');
+    micBtn.textContent = '🎤 Speak a sum';
+  }
+}
+
+/* =========================================================================
+   7. KEYPAD DEFINITION
+   ========================================================================= */
+
+const KEYS = [
+  /* row 1 */
+  { label: '2nd',  action: 'second', cls: 'fn' },
+  { label: 'DEG',  action: 'angle',  cls: 'fn' },
+  { label: 'MC',   action: 'mc',     cls: 'fn' },
+  { label: 'MR',   action: 'mr',     cls: 'fn' },
+  { label: 'M+',   action: 'mplus',  cls: 'fn' },
+  { label: 'M−',   action: 'mminus', cls: 'fn' },
+
+  /* row 2 */
+  { label: 'sin', insert: 'sin(', secondLabel: 'sin⁻¹', secondInsert: 'asin(', cls: 'fn' },
+  { label: 'cos', insert: 'cos(', secondLabel: 'cos⁻¹', secondInsert: 'acos(', cls: 'fn' },
+  { label: 'tan', insert: 'tan(', secondLabel: 'tan⁻¹', secondInsert: 'atan(', cls: 'fn' },
+  { label: '(',   insert: '(',   cls: 'fn' },
+  { label: ')',   insert: ')',   cls: 'fn' },
+  { label: '÷',   insert: '÷',   cls: 'op' },
+
+  /* row 3 */
+  { label: 'ln',  insert: 'ln(',  secondLabel: 'eˣ',  secondInsert: 'exp(', cls: 'fn' },
+  { label: 'log', insert: 'log(', secondLabel: '10ˣ', secondInsert: '10^(', cls: 'fn' },
+  { label: '√',   insert: '√(',   cls: 'fn' },
+  { label: 'xʸ',  insert: '^',    cls: 'op' },
+  { label: '%',   insert: '%',    cls: 'op' },
+  { label: '×',   insert: '×',    cls: 'op' },
+
+  /* row 4 */
+  { label: '7', insert: '7' },
+  { label: '8', insert: '8' },
+  { label: '9', insert: '9' },
+  { label: 'n!', insert: '!', cls: 'fn' },
+  { label: 'π',  insert: 'π', cls: 'fn' },
+  { label: '−',  insert: '−', cls: 'op' },
+
+  /* row 5 */
+  { label: '4',   insert: '4' },
+  { label: '5',   insert: '5' },
+  { label: '6',   insert: '6' },
+  { label: 'e',   insert: 'e',   cls: 'fn' },
+  { label: 'Ans', action: 'ans', cls: 'fn' },
+  { label: '+',   insert: '+',   cls: 'op' },
+
+  /* row 6 */
+  { label: '1',  insert: '1' },
+  { label: '2',  insert: '2' },
+  { label: '3',  insert: '3' },
+  { label: 'C',  action: 'clear', cls: 'danger' },
+  { label: '⌫',  action: 'back',  cls: 'danger' },
+  { label: '=',  action: 'equals', cls: 'eq' },
+
+  /* row 7 */
+  { label: '0',  insert: '0', cls: 'wide' },
+  { label: '.',  insert: '.' },
+  { label: '±',  action: 'negate' }
+];
+
+const OPERATOR_TEXT = /^[+\-*/^%!×÷−]$/;
+
+function renderKeypad() {
+  keypadEl.textContent = '';
+
+  KEYS.forEach((key, index) => {
+    const btn = document.createElement('button');
+    btn.className = 'key ' + (key.cls || '');
+    btn.dataset.index = index;
+
+    let label = key.label;
+    if (key.action === 'angle')  label = state.angleMode;
+    if (state.second && key.secondLabel) label = key.secondLabel;
+    btn.textContent = label;
+
+    if (key.action === 'second' && state.second) btn.classList.add('active');
+    keypadEl.appendChild(btn);
+  });
+}
+
+/* =========================================================================
+   8. INPUT HANDLING
+   ========================================================================= */
+
+function insert(text, isOperator = false) {
+  if (justEvaluated) {
+    // After "=", a digit starts a fresh sum; an operator continues from the answer.
+    state.expression = isOperator ? plainNumber(state.ans) : '';
+    justEvaluated = false;
+  }
+  state.expression += text;
+  setCoach('');
+  updateDisplay();
+}
+
+function backspace() {
+  if (justEvaluated) { justEvaluated = false; }
+  state.expression = state.expression.slice(0, -1);
+  setCoach('');
+  updateDisplay();
+}
+
+function clearAll() {
+  state.expression = '';
+  justEvaluated = false;
+  setCoach('Cleared.');
+  updateDisplay();
+}
+
+function toggleSign() {
+  if (!state.expression) { insert('−'); return; }
+  state.expression = state.expression.startsWith('−')
+    ? state.expression.slice(1)
+    : '−' + state.expression;
+  updateDisplay();
+}
+
+function currentValue() {
+  if (state.expression.trim()) {
+    try { return evaluate(normalize(state.expression), state.angleMode); }
+    catch { return state.ans; }
+  }
+  return state.ans;
+}
+
+/* ---------- the big one ---------- */
+function calculate() {
+  const raw = state.expression.trim();
+
+  if (!raw) {
+    setCoach('Nothing to calculate yet.', 'Type a sum like 2 + 2, then press =.', 'error');
+    speak('There is nothing to calculate yet.');
+    return;
+  }
+
+  try {
+    const value = evaluate(normalize(raw), state.angleMode);
+
+    state.ans = value;
+    justEvaluated = true;
+
+    resultEl.textContent = formatNumber(value);
+    resultEl.classList.remove('preview');
+
+    setCoach(`✓ ${raw} = ${formatNumber(value)}`, describeResult(raw, value), 'ok');
+    speak(formatNumber(value).replace(/[×^]/g, ' '));
+
+    state.history.unshift({ expr: raw, value });
+    if (state.history.length > 25) state.history.pop();
+    if (activeTab === 'history') renderTab('history');
+
+  } catch (err) {
+    const isCalc = err instanceof CalcError;
+    const message = isCalc ? err.message : 'Something went wrong while calculating.';
+    const hint    = isCalc ? err.hint : 'Try simplifying the expression.';
+
+    resultEl.textContent = '';
+    resultEl.classList.remove('preview');
+    setCoach('⚠ ' + message, hint, 'error');
+    speak('That did not work. ' + message);
+    justEvaluated = false;
+  }
+}
+
+/* A friendly one-liner shown next to the answer. */
+function describeResult(raw, value) {
+  if (raw.includes('%')) return 'Percentages: "200 + 10%" means 10% of 200, i.e. 220.';
+  if (raw.includes('!')) return 'Factorial — the product of every whole number up to that one.';
+  if (/sin|cos|tan/.test(raw)) return `Trigonometry calculated in ${state.angleMode} mode.`;
+  if (raw.includes('√')) return 'Square root — what number times itself gives the value inside?';
+  if (raw.includes('^')) return 'A power — the base multiplied by itself that many times.';
+  if (Number.isInteger(value) && Math.abs(value) > 1000) return 'That is a whole number.';
+  return 'Press a digit to start fresh, or an operator to keep going.';
+}
+
+/* ---------- routing a key press ---------- */
+function handleKey(key) {
+  if (key.action) {
+    switch (key.action) {
+      case 'second':
+        state.second = !state.second;
+        renderKeypad(); updateStatus();
+        return;
+      case 'angle':
+        state.angleMode = state.angleMode === 'DEG' ? 'RAD' : 'DEG';
+        updateStatus(); updateDisplay();
+        setCoach(`Switched to ${state.angleMode} mode.`,
+                 state.angleMode === 'DEG'
+                   ? 'sin(30) = 0.5 — angles measured in degrees.'
+                   : 'sin(30) ≈ −0.988 — angles measured in radians.');
+        return;
+      case 'clear':  clearAll();  return;
+      case 'back':   backspace(); return;
+      case 'equals': calculate(); return;
+      case 'ans':    insert('Ans'); return;
+      case 'negate': toggleSign(); return;
+
+      case 'mc':
+        state.memory = 0; updateStatus();
+        setCoach('Memory cleared.');
+        return;
+      case 'mr':
+        insert(plainNumber(state.memory));
+        return;
+      case 'mplus':
+        state.memory += currentValue(); updateStatus();
+        setCoach(`Memory is now ${formatNumber(state.memory)}.`);
+        return;
+      case 'mminus':
+        state.memory -= currentValue(); updateStatus();
+        setCoach(`Memory is now ${formatNumber(state.memory)}.`);
+        return;
+    }
+  }
+
+  const text = (state.second && key.secondInsert) ? key.secondInsert : key.insert;
+  if (text === undefined) return;
+
+  insert(text, OPERATOR_TEXT.test(text));
+
+  if (state.second) {          // 2nd is a one-shot modifier
+    state.second = false;
+    renderKeypad();
+    updateStatus();
+  }
+}
+
+keypadEl.addEventListener('click', (event) => {
+  const btn = event.target.closest('button[data-index]');
+  if (!btn) return;
+  handleKey(KEYS[Number(btn.dataset.index)]);
+  btn.blur();                  // keeps the space bar / Enter from re-firing
+});
+
+/* ---------- physical keyboard ---------- */
+document.addEventListener('keydown', (event) => {
+  const k = event.key;
+
+  if (/^[0-9.]$/.test(k))                { insert(k);              event.preventDefault(); return; }
+  if (k === '+' || k === '-')            { insert(k === '-' ? '−' : '+', true); event.preventDefault(); return; }
+  if (k === '*')                         { insert('×', true);      event.preventDefault(); return; }
+  if (k === '/')                         { insert('÷', true);      event.preventDefault(); return; }
+  if (k === '^' || k === '%' || k === '!') { insert(k, true);      event.preventDefault(); return; }
+  if (k === '(' || k === ')')            { insert(k);              event.preventDefault(); return; }
+  if (k === 'Enter' || k === '=')        { calculate();            event.preventDefault(); return; }
+  if (k === 'Backspace')                 { backspace();            event.preventDefault(); return; }
+  if (k === 'Escape')                    { clearAll();             event.preventDefault(); return; }
+});
+
+/* =========================================================================
+   9. SIDE PANEL — EXAMPLES, HISTORY, HELP
+   ========================================================================= */
+
+const EXAMPLES = [
+  { title: 'Area of a circle',     expr: 'π × 5^2',            note: 'π r² with a radius of 5' },
+  { title: 'Pythagoras',           expr: '√(3^2 + 4^2)',       note: 'the hypotenuse of a 3-4-5 triangle' },
+  { title: 'Compound interest',    expr: '1000 × (1 + 5%)^10', note: '£1000 at 5% for 10 years' },
+  { title: 'Everyday percentages', expr: '250 − 20%',          note: 'a 20% discount on 250' },
+  { title: 'Trigonometry',         expr: 'sin(30) + cos(60)',  note: 'in DEG mode' },
+  { title: 'Combinations',         expr: '6! ÷ (2! × 4!)',     note: 'how many ways to pick 2 from 6' },
+  { title: 'Logarithms',           expr: 'log(1000) + ln(e)',  note: 'base-10 log and natural log' },
+  { title: 'Powers',               expr: '2^10',               note: 'doubling ten times' },
+  { title: 'Absolute value',       expr: 'abs(0 − 42)',        note: 'distance from zero' }
+];
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function renderExamples() {
+  tabBody.textContent = '';
+
+  EXAMPLES.forEach((example) => {
+    const card = el('button', 'example');
+    card.appendChild(el('span', 'ex-title', example.title));
+    card.appendChild(el('code', '', example.expr));
+    card.appendChild(el('span', 'ex-note', example.note));
+
+    card.addEventListener('click', () => {
+      state.expression = example.expr;
+      justEvaluated = false;
+      updateDisplay();
+      setCoach(`${example.title} — ${example.note}`, 'Press = for the full explanation.');
+    });
+
+    tabBody.appendChild(card);
+  });
+}
+
+function renderHistory() {
+  tabBody.textContent = '';
+
+  if (state.history.length === 0) {
+    tabBody.appendChild(el('div', 'empty', 'Your calculations will appear here.'));
+    return;
+  }
+
+  state.history.forEach((entry) => {
+    const card = el('button', 'history-item');
+    card.appendChild(el('span', 'h-expr', entry.expr));
+    card.appendChild(el('span', 'h-val', '= ' + formatNumber(entry.value)));
+
+    card.addEventListener('click', () => {
+      state.expression = entry.expr;
+      justEvaluated = false;
+      updateDisplay();
+    });
+
+    tabBody.appendChild(card);
+  });
+}
+
+function renderHelp() {
+  tabBody.textContent = '';
+  const wrap = el('div', 'help');
+
+  wrap.appendChild(el('h4', '', 'Typing'));
+  const p1 = el('p');
+  p1.append('Use the keypad or your keyboard. ');
+  p1.appendChild(el('code', '', 'Enter'));
+  p1.append(' calculates, ');
+  p1.appendChild(el('code', '', 'Esc'));
+  p1.append(' clears, ');
+  p1.appendChild(el('code', '', 'Backspace'));
+  p1.append(' deletes.');
+  wrap.appendChild(p1);
+
+  wrap.appendChild(el('h4', '', 'Smart percentages'));
+  const p2 = el('p');
+  p2.appendChild(el('code', '', '200 + 10%'));
+  p2.append(' gives 220, because 10% is taken ');
+  const em = el('em', '', 'of 200');
+  p2.appendChild(em);
+  p2.append('. On its own, ');
+  p2.appendChild(el('code', '', '50%'));
+  p2.append(' is simply 0.5.');
+  wrap.appendChild(p2);
+
+  wrap.appendChild(el('h4', '', 'Angles'));
+  const p3 = el('p');
+  p3.append('The badge in the screen shows DEG or RAD — press ');
+  p3.appendChild(el('code', '', 'DEG'));
+  p3.append(' to switch. Inverse functions (sin⁻¹ etc.) live behind the ');
+  p3.appendChild(el('code', '', '2nd'));
+  p3.append(' key.');
+  wrap.appendChild(p3);
+
+  wrap.appendChild(el('h4', '', 'Voice'));
+  const p4 = el('p');
+  p4.append('🎤 lets you dictate a sum ("two plus five times three"). Voice feedback reads errors and answers aloud. Both need a browser with speech support — Chrome or Edge is best.');
+  wrap.appendChild(p4);
+
+  wrap.appendChild(el('h4', '', 'Why no “Error”?'));
+  const p5 = el('p');
+  p5.append('Most calculators just say "Error". This one parses your expression and explains what went wrong — a missing bracket, a division by zero, a negative square root — and how to fix it.');
+  wrap.appendChild(p5);
+
+  tabBody.appendChild(wrap);
+}
+
+function renderTab(name) {
+  activeTab = name;
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tab === name)
+  );
+  if (name === 'examples') renderExamples();
+  if (name === 'history')  renderHistory();
+  if (name === 'help')     renderHelp();
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => renderTab(tab.dataset.tab));
+});
+
+/* =========================================================================
+   10. TOOLBAR + BOOT
+   ========================================================================= */
+
+document.getElementById('micBtn').addEventListener('click', startListening);
+
+document.getElementById('speakBtn').addEventListener('click', (event) => {
+  state.speak = !state.speak;
+  updateStatus();
+  event.currentTarget.textContent = state.speak
+    ? '🔊 Voice feedback: on'
+    : '🔇 Voice feedback: off';
+  if (state.speak) speak('Voice feedback on.');
+  else if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+});
+
+function boot() {
+  renderKeypad();
+  updateStatus();
+  updateDisplay();
+  setCoach('');
+  renderTab('examples');
+}
+
+boot();
+</script>
+</body>
+</html>
